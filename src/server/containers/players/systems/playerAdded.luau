@@ -1,7 +1,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local oblivis = require(ReplicatedStorage.shared.containers.oblivis)
+local oblivis = require(ReplicatedStorage.shared.oblivis)
 local world = oblivis.world
 local components = oblivis.components
 local collect = oblivis.collect

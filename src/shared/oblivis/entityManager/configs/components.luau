@@ -1,9 +1,8 @@
-local World = require(script.Parent.world)
+local world = require(script.Parent.world)
 
 local components = {
-    lifetime = World:component(),
-
-    player = World:component()
+    lifetime = world.component(),
+    player = world.component()
 }
 
 return components

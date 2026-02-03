@@ -1,5 +1,6 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local AlloyECS = require(ReplicatedStorage.packages.alloyecs)
+local alloyEcs = require(ReplicatedStorage.packages.alloyecs)
+local observers = require(script.Parent.Parent.utils.observers)
 
-return require(ReplicatedStorage.packages.alloyecs).createWorld():: AlloyECS.World
+return observers.wrap(alloyEcs)

@@ -5,7 +5,7 @@ local ref = oblivis.ref
 local world = oblivis.world
 local components = oblivis.components
 
-return world:addSystem("clearRef", "update", {
+return world:add("clearRef", "update", {
 	writes = {components.lifetime},
 	reads = {components.lifetime}
 }, function(deltaTime: number)

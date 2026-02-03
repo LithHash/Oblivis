@@ -52,7 +52,7 @@ local function new(sources: RBXScriptSignal | {RBXScriptSignal}?, opts: Options?
 
 	function self:drain(): { PackedArgs }
 		if #queue == 0 then
-			return table.create(0)
+			return table.create(0):: { PackedArgs }
 		end
 
 		local drained = queue
@@ -99,7 +99,7 @@ local function new(sources: RBXScriptSignal | {RBXScriptSignal}?, opts: Options?
 
 	if sources ~= nil then
 		if typeof(sources) == "RBXScriptSignal" then
-			self:connect(sources)
+			self:connect(sources:: RBXScriptSignal)
 		elseif typeof(sources) == "table" then
 			for _, s in sources do
 				if typeof(s)  == "RBXScriptSignal" then

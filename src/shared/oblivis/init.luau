@@ -36,7 +36,9 @@ local function loadOblivis()
 	local startTime = os.clock()
 
 	for _, moduleScript in oblivisSystems:GetChildren() do
-		local _ = require(moduleScript):: any
+		local system = require(moduleScript):: any
+
+		entityManager.systems.start(system, entityManager.world)
 	end
 
 	loadContainers(sharedContainers)
@@ -58,7 +60,6 @@ local function loadOblivis()
 	local finishTime = os.clock()
 
 	print(`Oblivis [{runContext}] finished loading in {(finishTime - startTime)}s`)
-
 end
 
 local oblivisModule = {
@@ -74,5 +75,6 @@ for key, value in remotes:: any do
 end
 
 export type Module = typeof(oblivisModule) & typeof(entityManager) & typeof(remotes)
+export type World = typeof(entityManager.world)
 
 return oblivisModule:: Module

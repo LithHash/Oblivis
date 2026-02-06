@@ -63,8 +63,11 @@ local function connectPlayerObject(callback: (playerObject: PlayerObject) -> ())
 end
 
 local function _start()
-	require(script.systems.playerAdded)
-	require(script.systems.playerRemoved)
+	local addedSystem = require(script.systems.playerAdded)
+	local removedSystem = require(script.systems.playerRemoved)
+
+	oblivis.systems.start(addedSystem, world)
+	oblivis.systems.start(removedSystem, world)
 end
 
 return {

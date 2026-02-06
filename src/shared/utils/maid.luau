@@ -80,6 +80,15 @@ local function remove(self: MaidObject, task: PossibleTask)
 	cleanupTask(task)
 end
 
+local function pop(self: MaidObject, task: PossibleTask)
+	local index = table.find(self._cache, task)
+	if not index then
+		return
+	end
+
+	table.remove(self._cache, index)
+end
+
 local function add(self: MaidObject, task: PossibleTask): CleanupFunction
 	if table.find(self._cache, task) then
 		warn("Attempted to add a task:", task, "to a maid multiple times.")
@@ -125,7 +134,8 @@ local MaidMethods = {
 	add = add,
 	remove = remove,
 	clean = clean,
-	destroy = destroy
+	destroy = destroy,
+	pop = pop
 }
 
 local function new(): MaidObject

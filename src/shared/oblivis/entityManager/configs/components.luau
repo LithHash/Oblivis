@@ -1,8 +1,10 @@
 local world = require(script.Parent.world)
 
 local components = {
-    lifetime = world:component(),
-    player = world:component()
+    lifetime = world:component(), --// number
+    player = world:component(), --// Player
+
+    chunk = world:component() --// {x: number, z: number}
 }
 
-return components
+return table.freeze(components)

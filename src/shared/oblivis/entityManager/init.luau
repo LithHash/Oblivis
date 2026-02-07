@@ -7,11 +7,11 @@ local collect = require(script.utils.collect)
 local components = require(script.configs.components)
 local alloyEcs = require(ReplicatedStorage.packages.alloyecs)
 
-return {
+return table.freeze({
 	ref = ref,
 	world = world,
 	systems = systems,
 	collect = collect,
 	components = components,
 	alloyEcs = alloyEcs
-}
+})

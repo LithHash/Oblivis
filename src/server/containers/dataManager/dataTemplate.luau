@@ -1,0 +1,3 @@
+return {
+	coins = 0,
+}

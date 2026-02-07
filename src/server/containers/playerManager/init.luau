@@ -1,11 +1,18 @@
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
 
 local oblivis = require(ReplicatedStorage.shared.oblivis)
 local maid = require(ReplicatedStorage.shared.utils.maid)
 local signal = require(ReplicatedStorage.shared.utils.signal)
+local dataManager = require(ServerScriptService.server.containers.dataManager)
 
 local world = oblivis.world
 local components = oblivis.components
+local systems = oblivis.systems
+local collect = oblivis.collect
+
+local playerStore = dataManager.playerStore
 
 export type PlayerObject = {
 	entity: number,
@@ -20,8 +27,16 @@ export type PlayerCacheSchema = {[Player]: PlayerObject}
 local _playerCache: PlayerCacheSchema = {}
 local playerAddedSignal = signal.new()
 
+local function connectPlayerObject(callback: (playerObject: PlayerObject) -> ())
+	playerAddedSignal:listen(callback)
+end
+
 local function destroy(self: PlayerObject)
 	self.maid:destroy()
+end
+
+local function get(player: Player): PlayerObject?
+	return _playerCache[player]
 end
 
 local function new(player: Player): PlayerObject
@@ -30,14 +45,15 @@ local function new(player: Player): PlayerObject
 	end
 
 	local self: PlayerObject = {
-		entity = world:entity(),
+		entity = world:entity().id,
 		states = {},
 		maid = maid.new(),
 
 		destroy = destroy
 	}
 
-	world:set(self.entity, components.player, player)
+	playerStore:loadSession(player, self.entity)
+	world:assign(self.entity, components.player, player)
 
 	self.maid:add(function()
 		if _playerCache[player] then
@@ -54,26 +70,43 @@ local function new(player: Player): PlayerObject
 	return self
 end
 
-local function get(player: Player): PlayerObject?
-	return _playerCache[player]
-end
-
-local function connectPlayerObject(callback: (playerObject: PlayerObject) -> ())
-	playerAddedSignal:listen(callback)
-end
-
-local function _start()
-	local addedSystem = require(script.systems.playerAdded)
-	local removedSystem = require(script.systems.playerRemoved)
-
-	oblivis.systems.start(addedSystem, world)
-	oblivis.systems.start(removedSystem, world)
-end
-
-return {
+return table.freeze({
 	new = new,
 	get = get,
 	connectPlayerObject = connectPlayerObject,
 
-	_start = _start,
-}
+	_start = function()
+		local playersAdded = collect.new(Players.PlayerAdded)
+		local playersRemoved = collect.new(Players.PlayerRemoving)
+
+		local addedSystem = systems.create("playerAdded", {
+			update = function(world: oblivis.World, deltaTime: number)
+				for player: Player in playersAdded:iter() do
+					new(player)
+				end
+			end,
+
+			step = "Heartbeat",
+			priority = 10,
+		})
+
+		local removedSystem = systems.create("playerRemoved", {
+			update = function(world: oblivis.World, deltaTime: number)
+				for player: Player in playersRemoved:iter() do
+					local playerObject = get(player)
+					if not playerObject then
+						continue
+					end
+
+					playerObject:destroy()
+				end
+			end,
+
+			step = "Heartbeat",
+			priority = 10,
+		})
+
+		oblivis.systems.start(addedSystem, world)
+		oblivis.systems.start(removedSystem, world)
+	end,
+})

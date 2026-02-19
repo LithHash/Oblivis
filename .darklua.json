@@ -1,0 +1,22 @@
+{
+  "generator": "retain_lines",
+  "rules": [
+    {
+      "rule": "rename_variables",
+      "include_functions": true
+    },
+    "remove_types",
+    "remove_comments",
+    "remove_empty_do",
+    "remove_assertions",
+    "remove_unused_if_branch",
+    "remove_nil_declaration",
+    "remove_interpolated_string",
+    "remove_function_call_parens",
+    "compute_expression",
+    "remove_unused_variable",
+    "convert_index_to_field",
+    "filter_after_early_return",
+    "group_local_assignment"
+  ]
+}

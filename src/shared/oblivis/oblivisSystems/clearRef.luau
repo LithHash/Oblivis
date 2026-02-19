@@ -6,8 +6,8 @@ local systems = oblivis.systems
 local components = oblivis.components
 
 return systems.create("clearRef", {
-	update = function(world: typeof(oblivis.world), deltaTime: number)
-		local toDelete = table.create(16)
+	update = function(world: oblivis.World, deltaTime: number)
+		local toDelete = {}
 	    for object, entity in ref._entityMapping do
 	        if not object.Parent or not world:exists(entity) then
 	            toDelete[#toDelete + 1] = object

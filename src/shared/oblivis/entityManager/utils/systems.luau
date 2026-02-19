@@ -6,16 +6,16 @@ local ecs = require(ReplicatedStorage.packages.alloyecs)
 export type StepMethod = "Heartbeat" | "PreRender" | "PreSimulation"
 
 export type SystemConfig = {
-	update: (world: ecs.World, deltaTime: number) -> (),
-	condition: ((world: ecs.World) -> boolean)?,
+	update: (world: any, deltaTime: number) -> (),
+	condition: ((world: any) -> boolean)?,
 	step: StepMethod?,
 	priority: number?,
 }
 
 export type System = {
 	name: string,
-	update: (world: ecs.World, deltaTime: number) -> (),
-	condition: ((world: ecs.World) -> boolean)?,
+	update: (world: any, deltaTime: number) -> (),
+	condition: ((world: any) -> boolean)?,
 	step: StepMethod,
 	priority: number,
 	_thread: thread,

@@ -6,12 +6,15 @@ local oblivis = require(ReplicatedStorage.shared.oblivis)
 local maid = require(ReplicatedStorage.shared.utils.maid)
 local signal = require(ReplicatedStorage.shared.utils.signal)
 local dataManager = require(ServerScriptService.server.containers.dataManager)
+local chunkManager = require(ReplicatedStorage.shared.containers.chunkManager)
+local replicationManager = require(ReplicatedStorage.shared.containers.replicationManager)
 
 local world = oblivis.world
 local components = oblivis.components
 local systems = oblivis.systems
 local collect = oblivis.collect
 
+local manager = replicationManager.manager
 local playerStore = dataManager.playerStore
 
 export type PlayerObject = {
@@ -45,7 +48,7 @@ local function new(player: Player): PlayerObject
 	end
 
 	local self: PlayerObject = {
-		entity = world:entity().id,
+		entity = world:entity(),
 		states = {},
 		maid = maid.new(),
 
@@ -54,11 +57,17 @@ local function new(player: Player): PlayerObject
 
 	playerStore:loadSession(player, self.entity)
 	world:assign(self.entity, components.player, player)
+	manager:replicateEntity(self.entity, {components.player})
 
 	self.maid:add(function()
 		if _playerCache[player] then
 			_playerCache[player] = nil
 		end
+
+		chunkManager.removeEntity(self.entity)
+		chunkManager.removePlayer(player)
+
+		world:destroy(self.entity)
 
 		table.clear(self:: any)
 		self = nil:: any

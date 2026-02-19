@@ -11,16 +11,17 @@ return {
             returns = {}
         }),
 
-        pingServer = Packet.event("PingServer", {
-            schema = {},
-            direction = "toServer",
-            polling = true,
+        reliableReplication = Packet.event("ecs_replication", {
+        	schema = { Packet.types.table },
+        	direction = "toClient",
+        	polling = true,
         }),
 
-        pingClient = Packet.event("PingClient", {
-            schema = {packetTypes.number},
-            direction = "toClient",
-            polling = true,
-        })
+        unreliableReplication = Packet.event("ecs_replication_fast", {
+        	schema = { Packet.types.table },
+        	direction = "toClient",
+        	unreliable = true,
+        	polling = true
+        }),
     }
 }

@@ -143,6 +143,6 @@ local function new(chunkX: number, chunkZ: number): ChunkObject?
 	return self
 end
 
-return {
+return table.freeze({
 	new = new,
-}
+})

@@ -1,16 +1,23 @@
 --!strict
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
 
 local oblivis = require(ReplicatedStorage.shared.oblivis)
+
 local world = oblivis.world
 local components = oblivis.components
+local systems = oblivis.systems
 
 local chunkClass = require(script.chunkClass)
 
 local CHUNK_SIZE = 128
 local CHUNK_SIZE_INV = 1 / CHUNK_SIZE
 
-local registeredChunks: {[string]: chunkClass.ChunkObject} = {}
+local registeredChunks: { [string]: chunkClass.ChunkObject } = {}
+local playerChunks: { [Player]: { x: number, z: number } } = {}
+
+local chunkChangedCallbacks: { [number]: (entity: number, players: { Player }) -> () } = {}
+local nextCallbackId = 0
 
 local function chunkKey(chunkX: number, chunkZ: number): string
 	return `{chunkX},{chunkZ}`
@@ -44,6 +51,60 @@ local function getChunk(chunkX: number, chunkZ: number): chunkClass.ChunkObject?
 	return chunk
 end
 
+local function getExistingChunk(chunkX: number, chunkZ: number): chunkClass.ChunkObject?
+	if typeof(chunkX) ~= "number" or typeof(chunkZ) ~= "number" then
+		return nil
+	end
+
+	return registeredChunks[chunkKey(chunkX, chunkZ)]
+end
+
+local function getPlayersInRadius(centerX: number, centerZ: number, radius: number?): { Player }
+	local chunks = {}
+	local resolvedRadius = radius or 1
+	if resolvedRadius < 0 then
+		resolvedRadius = 0
+	end
+
+	local chunkCount = 0
+	for offsetX = -resolvedRadius, resolvedRadius do
+		for offsetZ = -resolvedRadius, resolvedRadius do
+			local chunk = getChunk(centerX + offsetX, centerZ + offsetZ)
+			if chunk then
+				chunkCount += 1
+				chunks[chunkCount] = chunk
+			end
+		end
+	end
+
+	local seen: { [Player]: boolean } = {}
+	local result: { Player } = {}
+	local resultCount = 0
+
+	for i = 1, chunkCount do
+		for player in chunks[i]:getPlayers() do
+			if not seen[player] then
+				seen[player] = true
+				resultCount += 1
+				result[resultCount] = player
+			end
+		end
+	end
+
+	return result
+end
+
+local function fireChunkChanged(entity: number, chunkX: number, chunkZ: number)
+	if not next(chunkChangedCallbacks) then
+		return
+	end
+
+	local nearbyPlayers = getPlayersInRadius(chunkX, chunkZ, 16)
+	for _, fn in chunkChangedCallbacks do
+		fn(entity, nearbyPlayers)
+	end
+end
+
 local function updateEntity(entity: number, position: Vector3): chunkClass.ChunkObject?
 	if typeof(entity) ~= "number" or not position then
 		warn("updateEntity: Invalid entity or position")
@@ -51,13 +112,14 @@ local function updateEntity(entity: number, position: Vector3): chunkClass.Chunk
 	end
 
 	local chunkX, chunkZ = worldToChunk(position)
-	local oldChunkData: {x: number, z: number} = world:read(entity, components.chunk)
+	local oldChunkData: { x: number, z: number }? = world:read(entity, components.chunk)
 
 	if not oldChunkData then
 		local chunk = getChunk(chunkX, chunkZ)
 		if chunk then
 			chunk:addEntity(entity)
-			world:assign(entity, components.chunk, {x = chunkX, z = chunkZ})
+			world:assign(entity, components.chunk, { x = chunkX, z = chunkZ })
+			fireChunkChanged(entity, chunkX, chunkZ)
 		end
 		return nil
 	end
@@ -66,7 +128,7 @@ local function updateEntity(entity: number, position: Vector3): chunkClass.Chunk
 		return nil
 	end
 
-	local oldChunk = getChunk(oldChunkData.x, oldChunkData.z)
+	local oldChunk = getExistingChunk(oldChunkData.x, oldChunkData.z)
 	if oldChunk then
 		oldChunk:removeEntity(entity)
 	end
@@ -74,47 +136,11 @@ local function updateEntity(entity: number, position: Vector3): chunkClass.Chunk
 	local newChunk = getChunk(chunkX, chunkZ)
 	if newChunk then
 		newChunk:addEntity(entity)
-		world:assign(entity, components.chunk, {x = chunkX, z = chunkZ})
+		world:assign(entity, components.chunk, { x = chunkX, z = chunkZ })
+		fireChunkChanged(entity, chunkX, chunkZ)
 	end
 
 	return newChunk
-end
-
-local function getNeighborChunks(chunkX: number, chunkZ: number, radius: number?): {chunkClass.ChunkObject}
-	if typeof(chunkX) ~= "number" or typeof(chunkZ) ~= "number" then
-		warn("getNeighborChunks: Invalid chunk coordinates")
-		return {}
-	end
-
-	radius = radius or 1
-	if radius < 0 then
-		radius = 0
-	end
-
-	local result: {chunkClass.ChunkObject} = {}
-	local resultCount = 0
-
-	for offsetX = -radius, radius do
-		for offsetZ = -radius, radius do
-			local key = chunkKey(chunkX + offsetX, chunkZ + offsetZ)
-			local chunk = registeredChunks[key]
-			if chunk then
-				resultCount += 1
-				result[resultCount] = chunk
-			end
-		end
-	end
-
-	return result
-end
-
-local function getExistingChunk(chunkX: number, chunkZ: number): chunkClass.ChunkObject?
-	if typeof(chunkX) ~= "number" or typeof(chunkZ) ~= "number" then
-		return nil
-	end
-
-	local key = chunkKey(chunkX, chunkZ)
-	return registeredChunks[key]
 end
 
 local function removeEntity(entity: number): boolean
@@ -138,15 +164,114 @@ local function removeEntity(entity: number): boolean
 	return false
 end
 
+local function updatePlayer(player: Player, position: Vector3): chunkClass.ChunkObject?
+	if typeof(player) ~= "Instance" or not player:IsA("Player") then
+		warn("updatePlayer: Invalid player")
+		return nil
+	end
+
+	if not position then
+		warn("updatePlayer: Invalid position")
+		return nil
+	end
+
+	local chunkX, chunkZ = worldToChunk(position)
+	local oldChunkData = playerChunks[player]
+
+	if not oldChunkData then
+		local chunk = getChunk(chunkX, chunkZ)
+		if chunk then
+			chunk:addPlayer(player)
+			playerChunks[player] = { x = chunkX, z = chunkZ }
+		end
+		return nil
+	end
+
+	if oldChunkData.x == chunkX and oldChunkData.z == chunkZ then
+		return nil
+	end
+
+	local oldChunk = getExistingChunk(oldChunkData.x, oldChunkData.z)
+	if oldChunk then
+		oldChunk:removePlayer(player)
+	end
+
+	local newChunk = getChunk(chunkX, chunkZ)
+	if newChunk then
+		newChunk:addPlayer(player)
+		playerChunks[player] = { x = chunkX, z = chunkZ }
+	end
+
+	return newChunk
+end
+
+local function removePlayer(player: Player): boolean
+	if typeof(player) ~= "Instance" or not player:IsA("Player") then
+		warn("removePlayer: Invalid player")
+		return false
+	end
+
+	local chunkData = playerChunks[player]
+	if not chunkData then
+		return false
+	end
+
+	local chunk = getExistingChunk(chunkData.x, chunkData.z)
+	if chunk then
+		chunk:removePlayer(player)
+	end
+
+	playerChunks[player] = nil
+	return true
+end
+
+local function getPlayerChunk(player: Player): chunkClass.ChunkObject?
+	if typeof(player) ~= "Instance" or not player:IsA("Player") then
+		return nil
+	end
+
+	local chunkData = playerChunks[player]
+	if not chunkData then
+		return nil
+	end
+
+	return getExistingChunk(chunkData.x, chunkData.z)
+end
+
+local function getNeighborChunks(
+	chunkX: number, chunkZ: number, radius: number?
+): { chunkClass.ChunkObject }
+	if typeof(chunkX) ~= "number" or typeof(chunkZ) ~= "number" then
+		warn("getNeighborChunks: Invalid chunk coordinates")
+		return {}
+	end
+
+	local resolvedRadius = radius or 1
+	if resolvedRadius < 0 then
+		resolvedRadius = 0
+	end
+
+	local result: { chunkClass.ChunkObject } = {}
+	local resultCount = 0
+
+	for offsetX = -resolvedRadius, resolvedRadius do
+		for offsetZ = -resolvedRadius, resolvedRadius do
+			local chunk = getChunk(chunkX + offsetX, chunkZ + offsetZ)
+			if chunk then
+				resultCount += 1
+				result[resultCount] = chunk
+			end
+		end
+	end
+
+	return result
+end
+
 local function cleanupEmptyChunks(): number
 	local cleanedCount = 0
 
 	for key, chunk in registeredChunks do
-		local entities = chunk:getEntities()
-		local players = chunk:getPlayers()
-
-		local isEmpty = next(entities) == nil and next(players) == nil
-		if isEmpty then
+		if chunk:isEmpty() then
 			registeredChunks[key] = nil
 			cleanedCount += 1
 		end
@@ -155,21 +280,14 @@ local function cleanupEmptyChunks(): number
 	return cleanedCount
 end
 
-local function queryChunk(chunkX: number, chunkZ: number, ...: number)
-	local chunk = getExistingChunk(chunkX, chunkZ)
-	if not chunk then
-		return world:view(...)
-	end
-
-	local componentIds = {...}
-	local baseView = world:view(table.unpack(componentIds))
-	local chunkEntities = chunk:getEntities()
-
+local function buildFilteredView(
+	baseView: oblivis.View, validEntities: { [number]: boolean }
+): oblivis.View
 	local filteredView = {}
 
 	function filteredView:forEach(fn: (...any) -> ())
 		baseView:forEach(function(entity: number, ...)
-			if chunkEntities[entity] then
+			if validEntities[entity] then
 				fn(entity, ...)
 			end
 		end)
@@ -185,21 +303,18 @@ local function queryChunk(chunkX: number, chunkZ: number, ...: number)
 		filteredView:forEach(function()
 			count += 1
 		end)
-
 		return count
 	end
 
-	function filteredView:entities(): {number}
-		local result: {number} = {}
+	function filteredView:entities(): { number }
+		local result: { number } = {}
 		local resultCount = 0
-
 		baseView:forEach(function(entity: number)
-			if chunkEntities[entity] then
+			if validEntities[entity] then
 				resultCount += 1
 				result[resultCount] = entity
 			end
 		end)
-
 		return result
 	end
 
@@ -207,77 +322,81 @@ local function queryChunk(chunkX: number, chunkZ: number, ...: number)
 		return filteredView:count() == 0
 	end
 
-	return filteredView:: any
+	return filteredView :: any
 end
 
-local function queryRadius(centerX: number, centerZ: number, radius: number, ...: number)
-	local componentIds = {...}
-	local baseView = world:view(table.unpack(componentIds))
+local function queryChunk(chunkX: number, chunkZ: number, ...: number): oblivis.View
+	local chunk = getExistingChunk(chunkX, chunkZ)
+	local chunkEntities: { [number]: boolean } = chunk and chunk:getEntities() or {}
+	local baseView = world:view(...)
+	return buildFilteredView(baseView, chunkEntities)
+end
+
+local function queryRadius(
+	centerX: number, centerZ: number, radius: number, ...: number
+): oblivis.View
+	local baseView = world:view(...)
 	local chunks = getNeighborChunks(centerX, centerZ, radius)
 
-	local validEntities: {[number]: boolean} = {}
+	local validEntities: { [number]: boolean } = {}
 	for i = 1, #chunks do
-		local chunkEntities = chunks[i]:getEntities()
-		for entity in chunkEntities do
+		for entity in chunks[i]:getEntities() do
 			validEntities[entity] = true
 		end
 	end
 
-	local filteredView = {}
-
-	function filteredView:forEach(fn: (...any) -> ())
-		baseView:forEach(function(entity: number, ...)
-			if validEntities[entity] then
-				fn(entity, ...)
-			end
-		end)
-	end
-
-	function filteredView:exclude(...: number)
-		baseView = baseView:exclude(...)
-		return filteredView
-	end
-
-	function filteredView:count(): number
-		local count = 0
-		filteredView:forEach(function()
-			count += 1
-		end)
-		return count
-	end
-
-	function filteredView:entities(): {number}
-		local result: {number} = {}
-		local resultCount = 0
-
-		baseView:forEach(function(entity: number)
-			if validEntities[entity] then
-				resultCount += 1
-				result[resultCount] = entity
-			end
-		end)
-
-		return result
-	end
-
-	function filteredView:empty(): boolean
-		return filteredView:count() == 0
-	end
-
-	return filteredView
+	return buildFilteredView(baseView, validEntities)
 end
 
-local function queryPosition(position: Vector3, radius: number, ...: number)
+local function queryPosition(position: Vector3, radius: number, ...: number): oblivis.View
 	local chunkX, chunkZ = worldToChunk(position)
 	return queryRadius(chunkX, chunkZ, radius, ...)
 end
 
-return {
+local function getPlayersNearPosition(position: Vector3, radius: number?): { Player }
+	local chunkX, chunkZ = worldToChunk(position)
+	return getPlayersInRadius(chunkX, chunkZ, radius)
+end
+
+local function onEntityChunkChanged(
+	fn: (entity: number, players: { Player }) -> ()
+): () -> ()
+	nextCallbackId += 1
+	local id = nextCallbackId
+	chunkChangedCallbacks[id] = fn
+
+	return function()
+		chunkChangedCallbacks[id] = nil
+	end
+end
+
+local function _start()
+	systems.create("chunkUpdate", {
+		update = require(script.systems.chunkUpdate) :: any,
+		step = "Heartbeat",
+		priority = 10,
+	})
+
+	systems.create("chunkCleanup", {
+		update = require(script.systems.chunkCleanup) :: any,
+		step = "Heartbeat",
+		priority = 20,
+	})
+end
+
+return table.freeze({
 	updateEntity = updateEntity,
+	removeEntity = removeEntity,
+
+	updatePlayer = updatePlayer,
+	removePlayer = removePlayer,
+	getPlayerChunk = getPlayerChunk,
+	getPlayersInRadius = getPlayersInRadius,
+	getPlayersNearPosition = getPlayersNearPosition,
+
 	getChunk = getChunk,
 	getExistingChunk = getExistingChunk,
 	getNeighborChunks = getNeighborChunks,
-	removeEntity = removeEntity,
 	cleanupEmptyChunks = cleanupEmptyChunks,
 	worldToChunk = worldToChunk,
 
@@ -285,5 +404,9 @@ return {
 	queryRadius = queryRadius,
 	queryPosition = queryPosition,
 
+	onEntityChunkChanged = onEntityChunkChanged,
+
 	CHUNK_SIZE = CHUNK_SIZE,
-}
+
+	_start = _start,
+})

@@ -2,7 +2,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local ServerScriptService = game:GetService("ServerScriptService")
 
+local alloyecs = require(ReplicatedStorage.packages.alloyecs)
 local entityManager = require(script.entityManager)
+local world = require(script.entityManager.configs.world)
 local remotes = require(script.remotes)
 
 local runContext = if RunService:IsServer() then "SERVER" else "CLIENT"
@@ -70,11 +72,14 @@ for key, value in entityManager:: any do
 	oblivisModule[key] = value
 end
 
+oblivisModule['remotes'] = {}
 for key, value in remotes:: any do
-	oblivisModule[key] = value
+	oblivisModule['remotes'][key] = value
 end
 
-export type Module = typeof(oblivisModule) & typeof(entityManager) & typeof(remotes)
-export type World = typeof(entityManager.world)
+export type Module = typeof(oblivisModule) & typeof(entityManager) & {['remotes']: typeof(remotes)}
+export type World = typeof(world)
+export type View = alloyecs.View
+export type Component = alloyecs.Component
 
 return oblivisModule:: Module

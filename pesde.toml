@@ -17,5 +17,5 @@ lune = "^0.10.2"
 
 [dependencies]
 alloyecs = { name = "lithhash/alloyecs", version = "^0.1.23" }
-packet = { name = "lithhash/packet", version = "^0.1.21" }
+packet = { name = "lithhash/packet", version = "^0.1.26" }
 coppermind = { name = "lithhash/coppermind", version = "^0.1.11" }

@@ -6,3 +6,4 @@
 [tools]
 rojo = "rojo-rbx/rojo@7.6.1"
 luau-lsp = "JohnnyMorganz/luau-lsp@1.59.0"
+darklua = "seaofvoices/darklua@0.17.3"

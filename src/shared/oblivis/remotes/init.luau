@@ -12,14 +12,24 @@ return {
         }),
 
         reliableReplication = Packet.event("ecs_replication", {
-        	schema = { Packet.types.table },
-        	direction = "toClient",
-        	polling = true,
+            schema = { Packet.array(Packet.struct({
+                component = packetTypes.variant,
+                entity = packetTypes.number,
+                kind = packetTypes.string,
+                value = packetTypes.variant,
+            })) },
+            direction = "toClient",
+            polling = true,
         }),
 
         unreliableReplication = Packet.event("ecs_replication_fast", {
-        	schema = { Packet.types.table },
-        	direction = "toClient",
+	        schema = { Packet.array(Packet.struct({
+	            component = packetTypes.variant,
+	            entity = packetTypes.number,
+	            kind = packetTypes.string,
+	            value = packetTypes.variant,
+	        })) },
+	        direction = "toClient",
         	unreliable = true,
         	polling = true
         }),

@@ -13,14 +13,14 @@ local chunkClass = require(script.chunkClass)
 local CHUNK_SIZE = 128
 local CHUNK_SIZE_INV = 1 / CHUNK_SIZE
 
-local registeredChunks: { [string]: chunkClass.ChunkObject } = {}
+local registeredChunks: { [Vector3]: chunkClass.ChunkObject } = {}
 local playerChunks: { [Player]: { x: number, z: number } } = {}
 
 local chunkChangedCallbacks: { [number]: (entity: number, players: { Player }) -> () } = {}
 local nextCallbackId = 0
 
-local function chunkKey(chunkX: number, chunkZ: number): string
-	return `{chunkX},{chunkZ}`
+local function chunkKey(chunkX: number, chunkZ: number): Vector3
+    return Vector3.new(chunkX, 0, chunkZ)
 end
 
 local function worldToChunk(position: Vector3): (number, number)

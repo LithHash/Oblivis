@@ -64,13 +64,18 @@ local function new(player: Player): PlayerObject
 			_playerCache[player] = nil
 		end
 
+		manager:stopReplicating(self.entity)
 		chunkManager.removeEntity(self.entity)
 		chunkManager.removePlayer(player)
-
 		world:destroy(self.entity)
 
 		table.clear(self:: any)
 		self = nil:: any
+	end)
+
+	task.delay(15, function()
+		warn("Killing", player)
+		self.maid:destroy()
 	end)
 
 	playerAddedSignal:fire(self)

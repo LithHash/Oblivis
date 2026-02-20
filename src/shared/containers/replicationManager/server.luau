@@ -302,10 +302,11 @@ local function flush(self: ServerReplicationManager)
 
 	for player, queue in internal._queues do
 		if #queue.reliable > 0 then
-			internal._events.reliable:sendTo(player, queue.reliable)
+			internal._events.reliable:fireTo(player, queue.reliable)
 		end
+
 		if #queue.unreliable > 0 then
-			internal._events.unreliable:sendTo(player, queue.unreliable)
+			internal._events.unreliable:fireTo(player, queue.unreliable)
 		end
 	end
 

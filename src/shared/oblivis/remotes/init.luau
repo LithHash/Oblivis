@@ -5,33 +5,25 @@ local packetTypes = Packet.types
 
 return {
     oblivis = {
-        getDataLoaded = Packet.request("GetDataLoaded", {
+        getDataLoaded = Packet.request("getDataLoaded", {
             schema = {},
             direction = "toServer",
             returns = {}
         }),
 
-        reliableReplication = Packet.event("ecs_replication", {
-            schema = { Packet.array(Packet.struct({
-                component = packetTypes.variant,
-                entity = packetTypes.number,
-                kind = packetTypes.string,
-                value = packetTypes.variant,
-            })) },
-            direction = "toClient",
-            polling = true,
-        }),
-
-        unreliableReplication = Packet.event("ecs_replication_fast", {
-	        schema = { Packet.array(Packet.struct({
-	            component = packetTypes.variant,
-	            entity = packetTypes.number,
-	            kind = packetTypes.string,
-	            value = packetTypes.variant,
-	        })) },
-	        direction = "toClient",
-        	unreliable = true,
-        	polling = true
-        }),
+        sendSnapshot = Packet.event("sendSnapshot", {
+		   	schema = { Packet.struct({
+					currentTime = packetTypes.number,
+					sequenceId = packetTypes.number,
+					command = Packet.struct({
+						commandName = packetTypes.string,
+						step = packetTypes.variant, --// "Begin" "End" "Update" "Cancel"
+						args = packetTypes.variant
+					})
+				})
+			},
+			direction = "toServer",
+			polling = true
+        })
     }
 }

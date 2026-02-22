@@ -1,7 +1,9 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
+local TextChatService = game:GetService("TextChatService")
 
+local characterManager = require(script.Parent.characterManager)
 local oblivis = require(ReplicatedStorage.shared.oblivis)
 local maid = require(ReplicatedStorage.shared.utils.maid)
 local signal = require(ReplicatedStorage.shared.utils.signal)
@@ -55,7 +57,14 @@ local function new(player: Player): PlayerObject
 		destroy = destroy
 	}
 
-	playerStore:loadSession(player, self.entity)
+	playerStore:loadSession(player, self.entity):andThen(function()
+		print("Data loaded.")
+
+		characterManager.createHumanoidModel(self.entity):listen(function(characterCreated: Model)
+			print("Created character for player:", characterCreated)
+		end)
+	end)
+
 	world:assign(self.entity, components.player, player)
 	manager:replicateEntity(self.entity, {components.player})
 
@@ -71,11 +80,6 @@ local function new(player: Player): PlayerObject
 
 		table.clear(self:: any)
 		self = nil:: any
-	end)
-
-	task.delay(15, function()
-		warn("Killing", player)
-		self.maid:destroy()
 	end)
 
 	playerAddedSignal:fire(self)
@@ -120,7 +124,24 @@ return table.freeze({
 			priority = 10,
 		})
 
+		local playerCharacterAttach = systems.create("playerCharacterAttach", {
+			update = function(world: oblivis.World, deltaTime: number)
+				world:view(components.player, components.renderData):forEach(function(
+					entity: number,
+					player: Player,
+					renderData: {instance: Instance}
+				)
+					player.Character = renderData.instance
+				end)
+			end,
+
+			step = "Heartbeat",
+			priority = 10,
+		})
+
+
 		oblivis.systems.start(addedSystem, world)
 		oblivis.systems.start(removedSystem, world)
+		oblivis.systems.start(playerCharacterAttach, world)
 	end,
 })

@@ -9,9 +9,10 @@ local components = {
 
     renderData = world:component():: alloyEcs.ComponentId<{
     	instance: Instance,
+     	parent: Instance?
     }>,
     transform = world:component():: alloyEcs.ComponentId<{position: Vector3, rotation: CFrame}>,
-    rigidbody = world:component():: alloyEcs.ComponentId<{
+    rigidBody = world:component():: alloyEcs.ComponentId<{
     	velocity: Vector3,
     	acceleration: Vector3,
     	mass: number,

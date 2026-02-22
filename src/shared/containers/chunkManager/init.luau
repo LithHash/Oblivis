@@ -11,6 +11,7 @@ local systems = oblivis.systems
 local chunkClass = require(script.chunkClass)
 
 local CHUNK_SIZE = 128
+local SIMULATION_DISTANCE = 16
 local CHUNK_SIZE_INV = 1 / CHUNK_SIZE
 
 local registeredChunks: { [Vector3]: chunkClass.ChunkObject } = {}
@@ -40,9 +41,9 @@ local function getChunk(chunkX: number, chunkZ: number): chunkClass.ChunkObject?
 
 	local key = chunkKey(chunkX, chunkZ)
 	local chunk = registeredChunks[key]
-
 	if not chunk then
-		chunk = chunkClass.new(chunkX, chunkZ)
+		chunk = chunkClass.new(chunkX, chunkZ):: chunkClass.ChunkObject
+
 		if chunk then
 			registeredChunks[key] = chunk
 		end
@@ -94,6 +95,35 @@ local function getPlayersInRadius(centerX: number, centerZ: number, radius: numb
 	return result
 end
 
+local function getNeighborChunks(
+	chunkX: number, chunkZ: number, radius: number?
+): { chunkClass.ChunkObject }
+	if typeof(chunkX) ~= "number" or typeof(chunkZ) ~= "number" then
+		warn("getNeighborChunks: Invalid chunk coordinates")
+		return {}
+	end
+
+	local resolvedRadius = radius or 1
+	if resolvedRadius < 0 then
+		resolvedRadius = 0
+	end
+
+	local result: { chunkClass.ChunkObject } = {}
+	local resultCount = 0
+
+	for offsetX = -resolvedRadius, resolvedRadius do
+		for offsetZ = -resolvedRadius, resolvedRadius do
+			local chunk = getChunk(chunkX + offsetX, chunkZ + offsetZ)
+			if chunk then
+				resultCount += 1
+				result[resultCount] = chunk
+			end
+		end
+	end
+
+	return result
+end
+
 local function fireChunkChanged(entity: number, chunkX: number, chunkZ: number)
 	if not next(chunkChangedCallbacks) then
 		return
@@ -103,6 +133,21 @@ local function fireChunkChanged(entity: number, chunkX: number, chunkZ: number)
 	for _, fn in chunkChangedCallbacks do
 		fn(entity, nearbyPlayers)
 	end
+end
+
+local function fireAffectedEntities(chunkX: number, chunkZ: number)
+    if not next(chunkChangedCallbacks) then
+    	return
+    end
+
+    for _, chunk in getNeighborChunks(chunkX, chunkZ, 16) do
+        for entity in chunk:getEntities() do
+            local chunkData = world:read(entity, components.chunk)
+            if chunkData then
+                fireChunkChanged(entity, chunkData.x, chunkData.z)
+            end
+        end
+    end
 end
 
 local function updateEntity(entity: number, position: Vector3): chunkClass.ChunkObject?
@@ -183,7 +228,9 @@ local function updatePlayer(player: Player, position: Vector3): chunkClass.Chunk
 		if chunk then
 			chunk:addPlayer(player)
 			playerChunks[player] = { x = chunkX, z = chunkZ }
+            fireAffectedEntities(chunkX, chunkZ)
 		end
+
 		return nil
 	end
 
@@ -201,6 +248,27 @@ local function updatePlayer(player: Player, position: Vector3): chunkClass.Chunk
 		newChunk:addPlayer(player)
 		playerChunks[player] = { x = chunkX, z = chunkZ }
 	end
+
+ 	local affectedEntities: { [number]: true } = {}
+
+    for _, chunk in getNeighborChunks(oldChunkData.x, oldChunkData.z, SIMULATION_DISTANCE) do
+        for entity in chunk:getEntities() do
+            affectedEntities[entity] = true
+        end
+    end
+
+    for _, chunk in getNeighborChunks(chunkX, chunkZ, SIMULATION_DISTANCE) do
+        for entity in chunk:getEntities() do
+            affectedEntities[entity] = true
+        end
+    end
+
+    for entity in affectedEntities do
+        local chunkData = world:read(entity, components.chunk)
+        if chunkData then
+            fireChunkChanged(entity, chunkData.x, chunkData.z)
+        end
+    end
 
 	return newChunk
 end
@@ -236,35 +304,6 @@ local function getPlayerChunk(player: Player): chunkClass.ChunkObject?
 	end
 
 	return getExistingChunk(chunkData.x, chunkData.z)
-end
-
-local function getNeighborChunks(
-	chunkX: number, chunkZ: number, radius: number?
-): { chunkClass.ChunkObject }
-	if typeof(chunkX) ~= "number" or typeof(chunkZ) ~= "number" then
-		warn("getNeighborChunks: Invalid chunk coordinates")
-		return {}
-	end
-
-	local resolvedRadius = radius or 1
-	if resolvedRadius < 0 then
-		resolvedRadius = 0
-	end
-
-	local result: { chunkClass.ChunkObject } = {}
-	local resultCount = 0
-
-	for offsetX = -resolvedRadius, resolvedRadius do
-		for offsetZ = -resolvedRadius, resolvedRadius do
-			local chunk = getChunk(chunkX + offsetX, chunkZ + offsetZ)
-			if chunk then
-				resultCount += 1
-				result[resultCount] = chunk
-			end
-		end
-	end
-
-	return result
 end
 
 local function cleanupEmptyChunks(): number
@@ -407,6 +446,7 @@ return table.freeze({
 	onEntityChunkChanged = onEntityChunkChanged,
 
 	CHUNK_SIZE = CHUNK_SIZE,
+	SIMULATION_DISTANCE = SIMULATION_DISTANCE,
 
 	_start = _start,
 })

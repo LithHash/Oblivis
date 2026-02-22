@@ -298,19 +298,23 @@ local function stopReplicating(self: ServerReplicationManager, entity: number)
 end
 
 local function flush(self: ServerReplicationManager)
-	local internal = self :: ServerReplicationManagerInternal
+    local internal = self :: ServerReplicationManagerInternal
 
-	for player, queue in internal._queues do
-		if #queue.reliable > 0 then
-			internal._events.reliable:fireTo(player, queue.reliable)
-		end
+    for player, queue in internal._queues do
+        if player.Parent == nil then
+            continue
+        end
 
-		if #queue.unreliable > 0 then
-			internal._events.unreliable:fireTo(player, queue.unreliable)
-		end
-	end
+        if #queue.reliable > 0 then
+            internal._events.reliable:fireTo(player, queue.reliable)
+        end
 
-	table.clear(internal._queues)
+        if #queue.unreliable > 0 then
+            internal._events.unreliable:fireTo(player, queue.unreliable)
+        end
+    end
+
+    table.clear(internal._queues)
 end
 
 local function new(world: any, events: any): ServerReplicationManager
@@ -335,8 +339,13 @@ local function new(world: any, events: any): ServerReplicationManager
 		(self :: ServerReplicationManager):stopReplicating(entity)
 	end)
 
-	chunkManager.onEntityChunkChanged(function(entity, players)
-	    self:reconcileVisibility(entity, players)
+	chunkManager.onEntityChunkChanged(function(entity, chunkPlayers)
+    	local targetedPlayers = self._targetedEntities[entity]
+    	if targetedPlayers then
+    	    self:reconcileVisibility(entity, targetedPlayers)
+    	else
+    	    self:reconcileVisibility(entity, chunkPlayers)
+    	end
 	end)
 
 	Players.PlayerRemoving:Connect(function(player: Player)
@@ -344,6 +353,20 @@ local function new(world: any, events: any): ServerReplicationManager
 		for _, awarePlayers in self._entityAwarePlayers do
 			awarePlayers[player] = nil
 		end
+	end)
+
+	Players.PlayerAdded:Connect(function(player: Player)
+    	for entity in self._replicatedEntities do
+    	    local awarePlayers = self._entityAwarePlayers[entity]
+    	    if not awarePlayers then
+    	        continue
+    	    end
+
+    	    if not awarePlayers[player] then
+    	        awarePlayers[player] = true
+    	        sendSnapshotToPlayer(self, entity, player)
+    	    end
+    	end
 	end)
 
 	return self :: ServerReplicationManager

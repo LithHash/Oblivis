@@ -232,4 +232,6 @@ return table.freeze({
 	create = create,
 	update = update,
 	queryPoint = queryPoint,
+
+	_start = _start,
 })
